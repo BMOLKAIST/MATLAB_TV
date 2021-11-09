@@ -60,18 +60,10 @@ classdef FIELD_EXPERIMENTAL_RETRIEVAL < handle
                 error('Filetype is not compatible.')
             end
             
-            if ~isequal(size(input_field),size(output_field))
-                error('Background and sample field must be of same size');
-            end
-            if size(input_field,1)~=size(input_field,2)
-                error('the image must be a square');
-            end
-            if h.parameters.resolution_image(1)~=h.parameters.resolution_image(2)
-                error('please enter an isotropic resolution for the image');
-            end
-            if h.parameters.resolution(1)~=h.parameters.resolution(2)
-                error('please enter an isotropic resolution for the output image');
-            end
+            assert(isequal(size(input_field),size(output_field)), 'Background and sample field must be of same size')
+            assert(size(input_field,1) == size(input_field,2), 'the image must be a square')
+            assert(h.parameters.resolution_image(1) == h.parameters.resolution_image(2), 'please enter an isotropic resolution for the image')
+            assert(h.parameters.resolution(1) == h.parameters.resolution(2), 'please enter an isotropic resolution for the output image')
             
             if nargin == 4
                 if strcmp(ROI, "rectangle") || strcmp(ROI, "Rectangle")

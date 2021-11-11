@@ -24,26 +24,14 @@ classdef BACKWARD_SOLVER_RYTOV < BACKWARD_SOLVER
             h.utility=DERIVE_OPTICAL_TOOL(h.parameters);
             warning('on','all');
             
-            if length(size(input_field))~=4
-               error('You need to provide the field with 4 dimenssion : dim1 x dim2 x polarisation x illuminationnumber') 
-            end
-            if size(input_field,1)~=size(input_field,2)
-                error('Please input a square field');
-            end
-            if ~isequal(size(input_field),size(output_field))
-                error('Please input field and bg of same size');
-            end
-            if h.parameters.resolution(1)~=h.parameters.resolution(2)
-                error('x/y input resolution must be isotropic');
-            end
-            if h.parameters.size(1)~=h.parameters.size(2)
-                error('x/y output size must be isotropic');
-            end
-            if h.parameters.size(1)~=size(input_field,1) || h.parameters.size(2)~=size(input_field,2)
-                error('declare size in the parameter must be the same as the field size');
-            end
-
-                        
+            % check fields and parameters
+            assert(ndims(input_field) == 4, 'You need to provide the field with 4 dimenssion : dim1 x dim2 x polarisation x illuminationnumber')
+            assert(size(input_field,1) == size(input_field,2), 'Please input a square field')
+            assert(isequal(size(input_field),size(output_field)), 'Please input field and bg of same size')
+            assert(h.parameters.resolution(1) == h.parameters.resolution(2), 'x/y input resolution must be isotropic')
+            assert(h.parameters.size(1) == h.parameters.size(2), 'x/y output size must be isotropic')
+            assert(h.parameters.size(1) == size(input_field,1) && h.parameters.size(2) == size(input_field,2), 'declare size in the parameter must be the same as the field size')
+            
             [bg,sp]=vector2scalarfield(input_field,output_field);
             retPhase=angle(sp./bg);
             retPhase=gather(unwrapp2_gpu(gpuArray(single(retPhase))));

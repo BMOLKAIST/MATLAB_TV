@@ -1,19 +1,20 @@
 %% 1. Set folder
 clc;clear;
 use_GPU = true;
-cd0 = matlab.desktop.editor.getActiveFilename;
-dash = cd0(strfind(cd0,'MAIN')-1);
-cd0 = cd0(1:strfind(cd0,'MAIN')-2);
-addpath(genpath(cd0));
-cds.data = [cd0 dash 'Data'];
+cds.head = fileparts(matlab.desktop.editor.getActiveFilename);
+cds.code = fullfile(cds.head, 'Codes');
+cds.data = fullfile(cds.head, 'Data');
+
+% 0. load functions
+addpath(genpath(cds.code));
 
 % 1. ODT raw data
-cds.bg_file = [cds.data dash '1. ODT raw data' dash 'SiO2_1_bg.tif'];
-cds.sp_file = [cds.data dash '1. ODT raw data' dash 'SiO2_1_sp.tif'];
+cds.bg_file = fullfile(cds.data, '1. ODT raw data', 'SiO2_1_bg.tif');
+cds.sp_file = fullfile(cds.data, '1. ODT raw data', 'SiO2_1_sp.tif');
 % 2. PEPSI-processed data
-cds.PEPSI = [cds.data dash '2. PepsiODT - processed data' dash 'PEPSI_data.mat'];
+cds.PEPSI = fullfile(cds.data, '2. PepsiODT - processed data', 'PEPSI_data.mat');
 % 3. FL raw data
-cds.FL = [cds.data dash '3. Fluorescence' dash 'FL_data.mat'];
+cds.FL = fullfile(cds.data, '3. Fluorescence', 'FL_data.mat');
 
 %% 1. TV to ODT
 MULTI_GPU=false;
@@ -169,7 +170,7 @@ backward_single_params.use_GPU = use_GPU;
 single_solver=BACKWARD_SOLVER_SINGLE(backward_single_params);
 [mask, OTF] = single_solver.mask_theoretical_OTF(RI_PEPSI, params2.NA, params2.NA);
 
-display('    Fast TV');
+disp('    Fast TV');
 
 tic;
 %profile on;

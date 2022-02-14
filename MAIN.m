@@ -37,7 +37,8 @@ field_retrieval_params.use_abbe_correction=true;
 field_retrieval=FIELD_EXPERIMENTAL_RETRIEVAL(field_retrieval_params);
 
 % Aberration correction data
-[input_field,field_trans,params]=field_retrieval.get_fields(cds.bg_file,cds.sp_file);
+[input_field,output_field]=field_retrieval.load_data(cds.bg_file,cds.sp_file);
+[input_field,field_trans,params]=field_retrieval.get_fields(input_field,output_field);
 % figure;orthosliceViewer(squeeze(abs(field_trans(:,:,:)./input_field(:,:,:))),'displayrange',[0 2]); colormap gray; title('Amplitude')
 % figure;orthosliceViewer(squeeze(angle(field_trans(:,:,:)./input_field(:,:,:)))); colormap jet; title('Phase')
 

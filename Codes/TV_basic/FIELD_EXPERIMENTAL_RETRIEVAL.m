@@ -20,20 +20,12 @@ classdef FIELD_EXPERIMENTAL_RETRIEVAL < handle
                 params=update_struct(params,init_params);
             end
         end
-    end
-    methods
-        function h=FIELD_EXPERIMENTAL_RETRIEVAL(params)
-            h.parameters=params;
-        end
-        function [input_field,output_field,updated_optical_parameters, k0s,is_overexposed,ROI]=get_fields(h,bg_file,sp_file, ROI)
 
+        function [input_field,output_field]=load_data(bg_file,sp_file)
             if sum(strfind(sp_file, 'avi')) ~= 0 % Herve's tissue
                 input_field=read_AVI(bg_file);
                 output_field=read_AVI(sp_file);
             elseif sum(strfind(sp_file, 'tiff')) ~= 0 % Herve's tissue
-                input_field=loadTIFF(bg_file);
-                output_field=loadTIFF(sp_file);
-            elseif sum(strfind(sp_file, 'tif')) ~= 0 % Herve's tissue
                 input_field=loadTIFF(bg_file);
                 output_field=loadTIFF(sp_file);
             elseif sum(strfind(sp_file, 'phantom')) ~= 0 % Herve's tissue
@@ -51,192 +43,194 @@ classdef FIELD_EXPERIMENTAL_RETRIEVAL < handle
                     output_field(:,:,j1)=loadTIFF(spdir(j1).name);
                 end
             elseif sum(strfind(sp_file, '\set0')) ~= 0 % My setup data
-                    input_field=load_tiff_MS_setup(bg_file);
-                    output_field=load_tiff_MS_setup(sp_file);
+                input_field=load_tiff_MS_setup(bg_file);
+                output_field=load_tiff_MS_setup(sp_file);
             elseif sum(strfind(sp_file, '\0')) ~= 0 % CART data
                 input_field=load_tomocube_PNG(bg_file);
                 output_field=load_tomocube_PNG(sp_file);
             else % Bead droplet data is itself field. Will be converted in the main script.
                 error('Filetype is not compatible.')
             end
-            
-            assert(isequal(size(input_field),size(output_field)), 'Background and sample field must be of same size')
-            assert(size(input_field,1) == size(input_field,2), 'the image must be a square')
-            assert(h.parameters.resolution_image(1) == h.parameters.resolution_image(2), 'please enter an isotropic resolution for the image')
-            assert(h.parameters.resolution(1) == h.parameters.resolution(2), 'please enter an isotropic resolution for the output image')
-            
-            if nargin == 4
-                if strcmp(ROI, "rectangle") || strcmp(ROI, "Rectangle")
-                    input_field0=fftshift(fft2(ifftshift(input_field(:,:,1))));
-                    output_field0=fftshift(fft2(ifftshift(output_field(:,:,1))));
-
-                    %1 center the field in the fourier space
-                    delete_band_1=round(size(input_field0,1).*h.parameters.cutout_portion):size(input_field0,1);
-                    delete_band_2=round(size(input_field0,2).*h.parameters.cutout_portion):size(input_field0,2);
-                    if h.parameters.other_corner
-                        delete_band_2=1:round(size(input_field0,2).*(1-h.parameters.cutout_portion));
-                    end
-                    normal_bg=input_field0(:,:,1);
-                    normal_bg(delete_band_1,:,:)=0;
-                    normal_bg(:,delete_band_2,:)=0;
-
-                    [center_pos_1,center_pos_2]=find(abs(normal_bg)==max(abs(normal_bg(:))));
-
-                    input_field0=fftshift(fftshift(circshift(input_field0,[1-center_pos_1,1-center_pos_2,0]),1),2);
-                    output_field0=fftshift(fftshift(circshift(output_field0,[1-center_pos_1,1-center_pos_2,0]),1),2);
-
-                    %2 match to the resolution
-                    resolution0 = h.parameters.resolution;
-                    h.parameters.resolution(1)=h.parameters.resolution_image(1);
-                    h.parameters.resolution(2)=h.parameters.resolution_image(2);
-                    h.parameters.size(1)=size(input_field0,1);
-                    h.parameters.size(2)=size(input_field0,2);
-                    h.utility=DERIVE_OPTICAL_TOOL(h.parameters);
-                    input_field0=input_field0.*h.utility.NA_circle;
-                    output_field0=output_field0.*h.utility.NA_circle;
-                    input_field0=fftshift(ifft2(ifftshift(input_field0)));
-                    output_field0=fftshift(ifft2(ifftshift(output_field0)));
-                    retPhase=angle(output_field0./input_field0);
-                    retPhase=gather(unwrapp2_gpu(gpuArray(single(retPhase))));
-                    if h.parameters.conjugate_field
-                        retPhase = -retPhase;
-                    end
-                    retPhase = PhiShiftMS(retPhase,1,1);
-                    while true
-                        close all
-                        figure, imagesc(retPhase, [0 max(retPhase(:))]), axis image, colormap gray, colorbar
-                        title('Choose square ROI')
-                        r = drawrectangle;
-                        ROI = r.Position;
-                        ROI = [round(ROI(2)) round(ROI(2))+round(ROI(3)) round(ROI(1)) round(ROI(1))+round(ROI(3)) ];
-                        close all
-                        figure, imagesc(max(squeeze(retPhase(ROI(1):ROI(2), ROI(3):ROI(4),:,:)),[],3), [0 max(retPhase(:))]), axis image, colormap gray
-                        satisfied = input('Satisfied? 1/0: ');
-                        if satisfied
-                            close;
-                            break;
-                        end
-                    end
-                    input_field = input_field(ROI(1):ROI(2), ROI(3):ROI(4),:,:,:);
-                    output_field = output_field(ROI(1):ROI(2), ROI(3):ROI(4),:,:,:);
-                    h.parameters.resolution = resolution0;
-                elseif length(ROI) == 4
-                    input_field = input_field(ROI(1):ROI(2), ROI(3):ROI(4),:,:,:);
-                    output_field = output_field(ROI(1):ROI(2), ROI(3):ROI(4),:,:,:);
-                else
-                    error('Unknown ROI function')
-                end
-            end
-            %size(input_field)
-            %size(output_field)
-            is_overexposed=(max(max(input_field,output_field),[],[1,2])>254);
-            
-            input_field=fftshift(fft2(ifftshift(input_field)));
-            output_field=fftshift(fft2(ifftshift(output_field)));
-
-            %1 center the field in the fourier space
-            delete_band_1=round(size(input_field,1).*h.parameters.cutout_portion):size(input_field,1);
-            delete_band_2=round(size(input_field,2).*h.parameters.cutout_portion):size(input_field,2);
-            if h.parameters.other_corner
-                delete_band_2=1:round(size(input_field,2).*(1-h.parameters.cutout_portion));
-            end
-            normal_bg=input_field(:,:,1);
-            normal_bg(delete_band_1,:,:)=0;
-            normal_bg(:,delete_band_2,:)=0;
-            
-            [center_pos_1,center_pos_2]=find(abs(normal_bg)==max(abs(normal_bg(:))));
-            
-            input_field=fftshift(fftshift(circshift(input_field,[1-center_pos_1,1-center_pos_2,0]),1),2);
-            output_field=fftshift(fftshift(circshift(output_field,[1-center_pos_1,1-center_pos_2,0]),1),2);
-            
-            
-            %2 match to the resolution
-            old_side_size=size(input_field,1);
-            resolution_ratio=h.parameters.resolution(1)/h.parameters.resolution_image(1);
-            if resolution_ratio>=1
-                %crop
-                crop_size=round((1/2)*(size(input_field,1)-size(input_field,1)./resolution_ratio));
-                input_field=input_field(1+crop_size:end-crop_size,1+crop_size:end-crop_size,:);
-                output_field=output_field(1+crop_size:end-crop_size,1+crop_size:end-crop_size,:);
-            end
-            if resolution_ratio<1
-                %padd
-                padd_size=-round((1/2)*(size(input_field,1)-size(input_field,1)./resolution_ratio));
-                input_field=padarray(input_field,[padd_size padd_size 0],'both');
-                output_field=padarray(output_field,[padd_size padd_size 0],'both');
-            end
-            h.parameters.resolution(1)=h.parameters.resolution_image(1).*old_side_size./size(input_field,1);
-            h.parameters.resolution(2)=h.parameters.resolution_image(2).*old_side_size./size(input_field,2);
-            %crop the NA
-            warning('off','all');
-            h.parameters.size(1)=size(input_field,1);
-            h.parameters.size(2)=size(input_field,2);
-            
-            h.utility=DERIVE_OPTICAL_TOOL(h.parameters);
-            warning('on','all');
-            
-            input_field=input_field.*h.utility.NA_circle;
-            output_field=output_field.*h.utility.NA_circle;
-            
-            % Find peaks
-            k0s = zeros(2,size(input_field,3));
-            % Subpixel k0s correction
-            limit = 1;
-            [param1,param2,param3,~]=CPU_placement_finder_prepare(size(input_field,1),size(input_field,2),1,limit);
-            if h.parameters.use_GPU
-                param1 = gpuArray(param1);
-                param2 = gpuArray(param2);
-                param3 = gpuArray(param3);
-            end
-            for jj = 1:size(input_field,3)
-                [k0s(1,jj), k0s(2,jj),~] = peak_subpixel_positioner(abs(input_field(:,:,jj)),param1,param2,param3);
-            end
-
-            input_field=fftshift(ifft2(ifftshift(input_field)));
-            output_field=fftshift(ifft2(ifftshift(output_field)));
-
-            [XX,YY] = ndgrid(((1:size(input_field,1))-1)/(size(input_field,1)),...
-                ((1:size(input_field,2))-1)/(size(input_field,2)));
-
-            input_field = input_field(3:(end-2),3:(end-2),:,:,:);
-            output_field = output_field(3:(end-2),3:(end-2),:,:,:);
-            
-            h.parameters.size(1)=size(input_field,1);
-            h.parameters.size(2)=size(input_field,2);
-            a = sum(sum(abs(input_field),1),2) / (size(input_field,1)*size(input_field,2));
-            input_field = input_field ./ a;
-            output_field = output_field ./ a;
-            if h.parameters.conjugate_field
-                input_field=conj(input_field);
-                output_field=conj(output_field);
-            end
-            retPhase=angle(output_field./input_field);
-            retPhase=gather(unwrapp2_gpu(gpuArray(single(retPhase))));
-            close all,
-            retAmplitude=abs(output_field./input_field);
-            
-            for jj = 1:size(retPhase,3)
-                retPhase(:,:,jj)=PhiShiftMS(retPhase(:,:,jj),1,1);
-%                 subplot(121),imagesc(retAmplitude(:,:,jj)),axis image, axis off, colorbar
-%                 subplot(122),imagesc(retPhase(:,:,jj)),axis image, axis off, colorbar, drawnow
-            end
-            output_field = retAmplitude .* input_field .* exp(1i.* retPhase) ;
-            
-            
-            input_field=reshape(input_field,size(input_field,1),size(input_field,2),1,[]);
-            output_field=reshape(output_field,size(output_field,1),size(output_field,2),1,[]);
-            
-            
-            h.utility=DERIVE_OPTICAL_TOOL(h.parameters);
-            
-            warning('abbe cos coefficient');
-            updated_optical_parameters=h.parameters;
-            base_param=BASIC_OPTICAL_PARAMETER();
-            warning ('off','all');
-            updated_optical_parameters=update_struct_no_new_field(base_param,updated_optical_parameters);
-            updated_optical_parameters.use_GPU = h.parameters.use_GPU;
-            warning ('on','all');
         end
+    end
+    methods
+        function h=FIELD_EXPERIMENTAL_RETRIEVAL(params)
+            h.parameters=params;
+        end
+        function [input_field,output_field,updated_optical_parameters, k0s,is_overexposed,ROI]=get_fields(h,input_field,output_field, ROI)
+
+
+            % Normal illumination: always first idx
+                if h.parameters.normalidx ~=1
+                    input_field = circshift(input_field, [0 0 -h.parameters.normalidx+1]);
+                    output_field = circshift(output_field, [0 0 -h.parameters.normalidx+1]);
+                end
+    
+                assert(isequal(size(input_field),size(output_field)), 'Background and sample field must be of same size')
+                assert(size(input_field,1) == size(input_field,2), 'the image must be a square')
+                assert(h.parameters.resolution_image(1) == h.parameters.resolution_image(2), 'please enter an isotropic resolution for the image')
+                assert(h.parameters.resolution(1) == h.parameters.resolution(2), 'please enter an isotropic resolution for the output image')
+
+                switch ndims(input_field) 
+                    case 2
+                        input_field = reshape(input_field, size(input_field,1), size(input_field,2), 1);
+                        output_field = reshape(output_field, size(output_field,1), size(output_field,2), 1);
+                    case 3
+                    otherwise
+                        error('image must be an single image or stack of images'); 
+                end
+    
+                if nargin == 4
+                    if strcmpi(ROI, 'rectangle')
+                        input_field0 = input_field(:,:,1);
+                        output_field0 = output_field(:,:,1);
+                        resolution0 = h.parameters.resolution;
+                        h.parameters.resolution(1)=h.parameters.resolution_image(1);
+                        h.parameters.resolution(2)=h.parameters.resolution_image(2);
+                        [input_field0, output_field0] = get_fields(h, input_field0, output_field0);
+                        retPhase =  squeeze(angle(output_field0./input_field0));
+                        if h.parameters.use_GPU
+                            retPhase=gather(unwrapp2_gpu(gpuArray(single(retPhase))));
+                        else
+                            retPhase=(unwrap2((double(retPhase))));
+                        end
+                        while true
+                            close all
+                            figure, imagesc(retPhase, [0 max(retPhase(:))]), axis image, colormap gray, colorbar
+                            title('Choose square ROI')
+                            r = drawrectangle;
+                            ROI = r.Position;
+                            ROI = [round(ROI(2)) round(ROI(2))+round(ROI(3)) round(ROI(1)) round(ROI(1))+round(ROI(3)) ];
+                            close all
+                            figure, imagesc(max(squeeze(retPhase(ROI(1):ROI(2), ROI(3):ROI(4),:,:)),[],3), [0 max(retPhase(:))]), axis image, colormap gray
+                            satisfied = input('Satisfied? 1/0: ');
+                            if satisfied
+                                close;
+                                break;
+                            end
+                        end
+                        h.parameters.resolution = resolution0;
+                    elseif length(ROI) ~= 4
+                        error('Unknown ROI function')
+                    end
+                    input_field = input_field(ROI(1):ROI(2), ROI(3):ROI(4),:,:,:);
+                    output_field = output_field(ROI(1):ROI(2), ROI(3):ROI(4),:,:,:);
+                end
+
+                is_overexposed=(max(max(input_field,output_field),[],[1,2])>254);
+                
+                input_field=fftshift(fft2(ifftshift(input_field)));
+                output_field=fftshift(fft2(ifftshift(output_field)));
+    
+                %1 center the field in the fourier space
+                delete_band_1=round(size(input_field,1).*h.parameters.cutout_portion):size(input_field,1);
+                delete_band_2=round(size(input_field,2).*h.parameters.cutout_portion):size(input_field,2);
+                if h.parameters.other_corner
+                    delete_band_2=1:round(size(input_field,2).*(1-h.parameters.cutout_portion));
+                end
+                normal_bg=input_field(:,:,1);
+                normal_bg(delete_band_1,:,:)=0;
+                normal_bg(:,delete_band_2,:)=0;
+                
+                [center_pos_1,center_pos_2]=find(abs(normal_bg)==max(abs(normal_bg(:))));
+                
+                input_field=fftshift(fftshift(circshift(input_field,[1-center_pos_1,1-center_pos_2,0]),1),2);
+                output_field=fftshift(fftshift(circshift(output_field,[1-center_pos_1,1-center_pos_2,0]),1),2);
+                
+                
+                %2 match to the resolution
+                old_side_size=size(input_field,1);
+                resolution_ratio=h.parameters.resolution(1)/h.parameters.resolution_image(1);
+                if resolution_ratio>=1
+                    %crop
+                    crop_size=round((1/2)*(size(input_field,1)-size(input_field,1)./resolution_ratio));
+                    input_field=input_field(1+crop_size:end-crop_size,1+crop_size:end-crop_size,:);
+                    output_field=output_field(1+crop_size:end-crop_size,1+crop_size:end-crop_size,:);
+                end
+                if resolution_ratio<1
+                    %padd
+                    padd_size=-round((1/2)*(size(input_field,1)-size(input_field,1)./resolution_ratio));
+                    input_field=padarray(input_field,[padd_size padd_size 0],'both');
+                    output_field=padarray(output_field,[padd_size padd_size 0],'both');
+                end
+                h.parameters.resolution(1)=h.parameters.resolution_image(1).*old_side_size./size(input_field,1);
+                h.parameters.resolution(2)=h.parameters.resolution_image(2).*old_side_size./size(input_field,2);
+                %crop the NA
+                warning('off','all');
+                h.parameters.size(1)=size(input_field,1);
+                h.parameters.size(2)=size(input_field,2);
+                
+                h.utility=DERIVE_OPTICAL_TOOL(h.parameters);
+                warning('on','all');
+                
+                input_field=input_field.*h.utility.NA_circle;
+                output_field=output_field.*h.utility.NA_circle;
+                
+                % Find peaks
+                k0s = zeros(2,size(input_field,3));
+                % Subpixel k0s correction
+                limit = 1;
+                [param1,param2,param3,~]=CPU_placement_finder_prepare(size(input_field,1),size(input_field,2),1,limit);
+                if h.parameters.use_GPU
+                    param1 = gpuArray(param1);
+                    param2 = gpuArray(param2);
+                    param3 = gpuArray(param3);
+                end
+                for jj = 1:size(input_field,3)
+                    [k0s(1,jj), k0s(2,jj),~] = peak_subpixel_positioner(abs(input_field(:,:,jj)),param1,param2,param3);
+                end
+
+                input_field=fftshift(ifft2(ifftshift(input_field)));
+                output_field=fftshift(ifft2(ifftshift(output_field)));
+    
+                [XX,YY] = ndgrid(((1:size(input_field,1))-1)/(size(input_field,1)),...
+                    ((1:size(input_field,2))-1)/(size(input_field,2)));
+    
+                input_field = input_field(3:(end-2),3:(end-2),:,:,:);
+                output_field = output_field(3:(end-2),3:(end-2),:,:,:);
+                
+                h.parameters.size(1)=size(input_field,1);
+                h.parameters.size(2)=size(input_field,2);
+                a = sum(sum(abs(input_field),1),2) / (size(input_field,1)*size(input_field,2));
+                input_field = input_field ./ a;
+                output_field = output_field ./ a;
+                if h.parameters.conjugate_field
+                    input_field=conj(input_field);
+                    output_field=conj(output_field);
+                end
+    
+                retPhase=angle(output_field./input_field);
+                if h.parameters.use_GPU
+                    retPhase=gather(unwrapp2_gpu(gpuArray(single(retPhase))));
+                else
+                    for jj = 1:size(retPhase,3)
+                        retPhase(:,:,jj)=(unwrap2((double(retPhase(:,:,jj)))));
+                    end
+                end
+                retAmplitude=abs(output_field./input_field);
+                
+                for jj = 1:size(retPhase,3)
+                    retPhase(:,:,jj)=PhiShiftMS(retPhase(:,:,jj),1,1);
+    %                 subplot(121),imagesc(retAmplitude(:,:,jj)),axis image, axis off, colorbar
+    %                 subplot(122),imagesc(retPhase(:,:,jj)),axis image, axis off, colorbar, drawnow
+                end
+                output_field = retAmplitude .* input_field .* exp(1i.* retPhase) ;
+                
+                
+                input_field=reshape(input_field,size(input_field,1),size(input_field,2),1,[]);
+                output_field=reshape(output_field,size(output_field,1),size(output_field,2),1,[]);
+                
+    
+                h.utility=DERIVE_OPTICAL_TOOL(h.parameters);
+                
+                warning('abbe cos coefficient');
+                updated_optical_parameters=h.parameters;
+                base_param=BASIC_OPTICAL_PARAMETER();
+                warning ('off','all');
+                updated_optical_parameters=update_struct_no_new_field(base_param,updated_optical_parameters);
+                updated_optical_parameters.use_GPU = h.parameters.use_GPU;
+                warning ('on','all');
+            end
         function [input_field_f, output_field_f,aberration_params] = get_aberration_pattern(h,input_field, output_field, correct_params)
         % Stitch pupil
             fE = fftshift(fft2(ifftshift(squeeze(output_field./input_field))));

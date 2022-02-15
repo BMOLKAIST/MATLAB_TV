@@ -53,8 +53,6 @@ mask = ORytov ~=0;
 
 % RI - TV
 backward_single_params=BACKWARD_SOLVER_SINGLE.get_default_parameters(params);
-init_backward_single_params=BACKWARD_SOLVER_RYTOV.get_default_parameters(params);
-init_solver_backward_single=BACKWARD_SOLVER_RYTOV(init_backward_single_params);
 backward_single_params.init_solver=rytov_solver;
 backward_single_params.verbose = false;
 
@@ -89,8 +87,6 @@ rytov_params=BACKWARD_SOLVER_RYTOV.get_default_parameters(params2);
 rytov_params.use_non_negativity=false;
 rytov_solver=BACKWARD_SOLVER_RYTOV(rytov_params);
 backward_single_params=BACKWARD_SOLVER_SINGLE.get_default_parameters(params2);
-init_backward_single_params=BACKWARD_SOLVER_RYTOV.get_default_parameters(params2);
-init_solver_backward_single=BACKWARD_SOLVER_RYTOV(init_backward_single_params);
 backward_single_params.init_solver=rytov_solver;
 backward_single_params.verbose = false;
 
@@ -154,8 +150,6 @@ rytov_params=BACKWARD_SOLVER_RYTOV.get_default_parameters(params2);
 rytov_params.use_non_negativity=false;
 rytov_solver=BACKWARD_SOLVER_RYTOV(rytov_params);
 backward_single_params=BACKWARD_SOLVER_SINGLE.get_default_parameters(params2);
-init_backward_single_params=BACKWARD_SOLVER_RYTOV.get_default_parameters(params2);
-init_solver_backward_single=BACKWARD_SOLVER_RYTOV(init_backward_single_params);
 backward_single_params.init_solver=rytov_solver;
 backward_single_params.verbose = false;
 

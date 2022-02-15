@@ -655,7 +655,7 @@ function Data=load_tiff_MS_setup(dirname, num_field)
         num_field = length(spdir);
     end
     for i1=1:num_field
-        img=imread(spdir(i1).name);
+        img=imread(fullfile(spdir(i1).folder,spdir(i1).name));
         if i1==1
             Data=zeros([size(img) num_field]);
         end
@@ -667,7 +667,7 @@ function Data=load_tomocube_PNG(dirname)
     fileformat=fullfile(dirname,'*.png');
     spdir=dir(fileformat);
     for i1=1:length(spdir)
-        img=imread(spdir(i1).name);
+        img=imread(fullfile(spdir(i1).folder,spdir(i1).name));
         if i1==1
             Data=zeros([size(img) length(spdir)]);
         end

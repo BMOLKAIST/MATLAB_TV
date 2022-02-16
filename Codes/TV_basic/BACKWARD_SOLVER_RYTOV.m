@@ -2,22 +2,15 @@ classdef BACKWARD_SOLVER_RYTOV < BACKWARD_SOLVER
     properties (SetAccess = protected, Hidden = true)
         utility;
     end
-    methods(Static)
-        function params=get_default_parameters(init_params)
-            params=get_default_parameters@BACKWARD_SOLVER();
-            %specific parameters
-            
-            params.use_non_negativity=false;
-            params.non_negativity_iteration=100;
-            
-            if nargin==1
-                params=update_struct(params,init_params);
-            end
-        end
-    end
     methods
         function h=BACKWARD_SOLVER_RYTOV(params)
-            h@BACKWARD_SOLVER(params);
+            init_params=struct('use_non_negativity',false,'non_negativity_iteration', 100);
+            if nargin==1
+                warning('off','all');
+                init_params=update_struct(init_params, params);
+                warning('on','all');
+            end
+            h@BACKWARD_SOLVER(init_params);
         end
         function [RI, ORytov]=solve(h,input_field,output_field)
             warning('off','all');

@@ -1,55 +1,30 @@
 classdef FIELD_EXPERIMENTAL_RETRIEVAL < handle
     properties (SetAccess = private, Hidden = true)
-        parameters;
-        
+        parameters=struct(...
+                'size',[100 100 100], ...
+                'wavelength', 0.532, ...
+                'NA',1.2, ...
+                'RI_bg',1.336, ...
+                'resolution',[0.1 0.1 0.1], ...
+                'vector_simulation', true, ...
+                'use_abbe_sine', true, ...
+                'resolution_image', [0.1 0.1], ...
+                'use_abbe_correction', true, ...
+                'cutout_portion', 1/3, ...
+                'other_corner',false, ...
+                'conjugate_field',false, ...
+                'use_GPU',true, ...
+                'normalidx',1 ...
+            );
         utility;
     end
-    methods(Static)
-        function params=get_default_parameters(init_params)
-            %OPTICAL PARAMETERS
-            params=BASIC_OPTICAL_PARAMETER();
-            %SIMULATION PARAMETERS
-            params.resolution_image=[1 1]*0.1;
-            params.use_abbe_correction=true;
-            params.cutout_portion=1/3;
-            params.other_corner=false;%false;%if the field is in another corner of the image
-            params.conjugate_field=false;
-            params.use_GPU = true;
-            params.normalidx = 1;
-            
-            if nargin==1
-                params=update_struct(params,init_params);
-            end
-        end
-
-        function [input_field,output_field]=load_data(bg_file,sp_file)
-            if nargin==2
-                output_field=FIELD_EXPERIMENTAL_RETRIEVAL.load_data(sp_file);
-            end
-            [~,~,ext]=fileparts(bg_file);
-            if strcmpi(ext,'.avi')
-                input_field=read_AVI(bg_file);
-            elseif strcmpi(ext, '.tiff')||strcmpi(ext, '.tif')
-                input_field=loadTIFF(bg_file);
-            elseif sum(strfind(bg_file, 'phantom')) ~= 0
-                cd(bg_file)
-                spdir = dir('*.tif');
-                for j1 = 1:length(spdir)
-                    clc, disp([num2str(j1) ' / ' num2str(length(spdir))])
-                    input_field(:,:,j1)=loadTIFF(spdir(j1).name);
-                end
-            elseif sum(strfind(bg_file, '\set0')) ~= 0
-                input_field=load_tiff_MS_setup(bg_file);
-            elseif sum(strfind(bg_file, '\0')) ~=  0
-                input_field=load_tomocube_PNG(bg_file);
-            else % Bead droplet data is itself field. Will be converted in the main script.
-                error('Filetype is not compatible.')
-            end
-        end
-    end
     methods
-        function h=FIELD_EXPERIMENTAL_RETRIEVAL(params)
-            h.parameters=params;
+        function h=FIELD_EXPERIMENTAL_RETRIEVAL(init_params)
+            if nargin==1
+                warning('off','all');
+                h.parameters=update_struct(h.parameters,init_params);
+                warning('on','all');
+            end
         end
         function [input_field,output_field,updated_optical_parameters, k0s,is_overexposed,ROI]=get_fields(h,input_field,output_field, ROI)
 
@@ -215,12 +190,16 @@ classdef FIELD_EXPERIMENTAL_RETRIEVAL < handle
                 h.utility=DERIVE_OPTICAL_TOOL(h.parameters);
                 
                 warning('abbe cos coefficient');
-                updated_optical_parameters=h.parameters;
-                base_param=BASIC_OPTICAL_PARAMETER();
-                warning ('off','all');
-                updated_optical_parameters=update_struct_no_new_field(base_param,updated_optical_parameters);
-                updated_optical_parameters.use_GPU = h.parameters.use_GPU;
-                warning ('on','all');
+                updated_optical_parameters=struct( ...
+                    'size',h.parameters.size, ...
+                    'wavelength',h.parameters.wavelength, ...
+                    'NA',h.parameters.NA, ...
+                    'RI_bg',h.parameters.RI_bg, ...
+                    'resolution',h.parameters.resolution, ...
+                    'vector_simulation',h.parameters.vector_simulation, ...
+                    'use_abbe_sine',h.parameters.use_abbe_sine, ...
+                    'use_GPU',h.parameters.use_GPU ...
+                );
             end
         function [input_field_f, output_field_f,aberration_params] = get_aberration_pattern(h,input_field, output_field, correct_params)
         % Stitch pupil
@@ -638,54 +617,16 @@ classdef FIELD_EXPERIMENTAL_RETRIEVAL < handle
             h.utility=DERIVE_OPTICAL_TOOL(h.parameters);
             
             warning('abbe cos coefficient');
-            updated_optical_parameters=h.parameters;
-            base_param=BASIC_OPTICAL_PARAMETER();
-            warning ('off','all');
-            updated_optical_parameters=update_struct_no_new_field(base_param,updated_optical_parameters);
-            warning ('on','all');
+            updated_optical_parameters=struct( ...
+                'size',h.parameters.size, ...
+                'wavelength',h.parameters.wavelength, ...
+                'NA',h.parameters.NA, ...
+                'RI_bg',h.parameters.RI_bg, ...
+                'resolution',h.parameters.resolution, ...
+                'vector_simulation',h.parameters.vector_simulation, ...
+                'use_abbe_sine',h.parameters.use_abbe_sine ...
+            );
         end
 
-    end
-end
-
-function Data=load_tiff_MS_setup(dirname, num_field)
-    fileformat=fullfile(dirname,'*.tiff');
-    spdir=dir(fileformat);
-    if nargin == 1
-        num_field = length(spdir);
-    end
-    for i1=1:num_field
-        img=imread(fullfile(spdir(i1).folder,spdir(i1).name));
-        if i1==1
-            Data=zeros([size(img) num_field]);
-        end
-        Data(:,:,i1)=img;
-    end
-end
-
-function Data=load_tomocube_PNG(dirname)
-    fileformat=fullfile(dirname,'*.png');
-    spdir=dir(fileformat);
-    for i1=1:length(spdir)
-        img=imread(fullfile(spdir(i1).folder,spdir(i1).name));
-        if i1==1
-            Data=zeros([size(img) length(spdir)]);
-        end
-        Data(:,:,i1)=img;
-    end
-end
-
-function object=loadTIFF(fname,num_images)
-    info = imfinfo(fname);
-    if nargin == 1
-        num_images = numel(info);
-    end
-    display(['Number of images (read) : ',num2str(num_images)]);
-    object= zeros(info(1).Width,info(1).Height,num_images,'single');
-    for k = 1:num_images
-       object(:,:,k) = imread(fname, k, 'Info', info);
-    end
-    if num_images==1
-       object=squeeze(object);
     end
 end

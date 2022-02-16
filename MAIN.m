@@ -18,7 +18,7 @@ cds.FL = fullfile(cds.data, '3. Fluorescence', 'FL_data.mat');
 
 %% 1. TV to ODT
 MULTI_GPU=false;
-params=BASIC_OPTICAL_PARAMETER();
+params=struct;
 params.NA=1.16;
 params.RI_bg=1.3355;
 params.wavelength=0.532;
@@ -28,7 +28,7 @@ params.size=[0 0 71];
 params.use_GPU = use_GPU;
 
 %2 illumination parameters
-field_retrieval_params=FIELD_EXPERIMENTAL_RETRIEVAL.get_default_parameters(params);
+field_retrieval_params=params;
 field_retrieval_params.resolution_image=[1 1]*(5.5/100);
 field_retrieval_params.conjugate_field=true;
 field_retrieval_params.use_abbe_correction=true;
@@ -37,22 +37,20 @@ field_retrieval_params.use_abbe_correction=true;
 field_retrieval=FIELD_EXPERIMENTAL_RETRIEVAL(field_retrieval_params);
 
 % Aberration correction data
-[input_field,output_field]=field_retrieval.load_data(cds.bg_file,cds.sp_file);
+[input_field,output_field]=load_data(cds.bg_file,cds.sp_file);
 [input_field,field_trans,params]=field_retrieval.get_fields(input_field,output_field);
 % figure;orthosliceViewer(squeeze(abs(field_trans(:,:,:)./input_field(:,:,:))),'displayrange',[0 2]); colormap gray; title('Amplitude')
 % figure;orthosliceViewer(squeeze(angle(field_trans(:,:,:)./input_field(:,:,:)))); colormap jet; title('Phase')
 
 % RI - rytov
-rytov_params=BACKWARD_SOLVER_RYTOV.get_default_parameters(params);
-rytov_params.use_non_negativity=false;
-rytov_solver=BACKWARD_SOLVER_RYTOV(rytov_params);
+rytov_solver=BACKWARD_SOLVER_RYTOV(params);
 [RI_rytov, ORytov]=((rytov_solver.solve(input_field,field_trans)));
 RI_rytov = real(RI_rytov);
 mask = ORytov ~=0;
 % figure;orthosliceViewer(real(RI_rytov)); title('Rytov')
 
 % RI - TV
-backward_single_params=BACKWARD_SOLVER_SINGLE.get_default_parameters(params);
+backward_single_params=params;
 backward_single_params.init_solver=rytov_solver;
 backward_single_params.verbose = false;
 
@@ -74,7 +72,7 @@ figure;orthosliceViewer(real(cat(2, RI_rytov,RI_TV))); title('Rytov only vs TV')
 %% 2. TV to PEPSI
 % Load data
 load(cds.PEPSI)
-params2=BASIC_OPTICAL_PARAMETER();
+params2=struct;
 params2.NA=0.75;%NA_obj;
 params2.RI_bg=1.495;%n_m;
 params2.wavelength=0.449;%lambda;
@@ -83,10 +81,8 @@ params2.size=size(RI_PEPSI);
 params2.use_GPU = use_GPU;
 
 % Initialize solver
-rytov_params=BACKWARD_SOLVER_RYTOV.get_default_parameters(params2);
-rytov_params.use_non_negativity=false;
-rytov_solver=BACKWARD_SOLVER_RYTOV(rytov_params);
-backward_single_params=BACKWARD_SOLVER_SINGLE.get_default_parameters(params2);
+rytov_solver=BACKWARD_SOLVER_RYTOV(params2);
+backward_single_params=params2;
 backward_single_params.init_solver=rytov_solver;
 backward_single_params.verbose = false;
 
@@ -109,14 +105,14 @@ figure;orthosliceViewer(real(cat(2, RI_PEPSI,RI_PEPSI_TV))); title('Rytov only v
 %% TV to FL
 load(cds.FL)
 FL_raw = FL_raw - min(FL_raw(:));
-params3=BASIC_OPTICAL_PARAMETER();
+params3=struct;
 params3.NA=FL_params.NA;
 params3.RI_bg=FL_params.n_m;
 params3.lambda = FL_params.lambda;
 params3.resolution=FL_params.resolution;
 params3.resolution_image=FL_params.resolution;
 params3.size=size(FL_raw);
-FL_params=FL_SOLVER.get_default_parameters(params3);
+FL_params=params3;
 FL_params.RL_iterations = 10;
 FL_params.itter_max=30;
 FL_params.step = 1;
@@ -134,7 +130,7 @@ figure;orthosliceViewer(real(cat(2, FL_raw,I_RL, I_TV)));
 %% TV with cuda
 % Load data
 load(cds.PEPSI)
-params2=BASIC_OPTICAL_PARAMETER();
+params2=struct;
 params2.NA=0.75;%NA_obj;
 params2.RI_bg=1.495;%n_m;
 params2.wavelength=0.449;%lambda;
@@ -146,10 +142,8 @@ pot2RI=@(pot) single(params2.RI_bg*sqrt(1+pot./((2*pi*params2.RI_bg/params2.wave
 RI2pot=@(RI)  single((2*pi*params2.RI_bg/params2.wavelength)^2*(RI.^2/params2.RI_bg^2-1));
 
 % Initialize solver
-rytov_params=BACKWARD_SOLVER_RYTOV.get_default_parameters(params2);
-rytov_params.use_non_negativity=false;
-rytov_solver=BACKWARD_SOLVER_RYTOV(rytov_params);
-backward_single_params=BACKWARD_SOLVER_SINGLE.get_default_parameters(params2);
+rytov_solver=BACKWARD_SOLVER_RYTOV(params2);
+backward_single_params=params2;
 backward_single_params.init_solver=rytov_solver;
 backward_single_params.verbose = false;
 

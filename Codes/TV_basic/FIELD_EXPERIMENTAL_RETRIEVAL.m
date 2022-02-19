@@ -92,14 +92,13 @@ classdef FIELD_EXPERIMENTAL_RETRIEVAL < handle
                 output_field=fftshift(fft2(ifftshift(output_field)));
     
                 %1 center the field in the fourier space
-                delete_band_1=round(size(input_field,1).*h.parameters.cutout_portion):size(input_field,1);
-                delete_band_2=round(size(input_field,2).*h.parameters.cutout_portion):size(input_field,2);
+                search_band_1=1:round(size(input_field,1).*h.parameters.cutout_portion);
+                search_band_2=1:round(size(input_field,1).*h.parameters.cutout_portion);
                 if h.parameters.other_corner
-                    delete_band_2=1:round(size(input_field,2).*(1-h.parameters.cutout_portion));
+                    search_band_2=round(size(input_field,2).*(1-h.parameters.cutout_portion)):size(input_field,2);
                 end
-                normal_bg=input_field(:,:,1);
-                normal_bg(delete_band_1,:,:)=0;
-                normal_bg(:,delete_band_2,:)=0;
+                normal_bg=zeros(size(input_field,1), size(input_field,2));
+                normal_bg(search_band_1, search_band_2)=input_field(search_band_1, search_band_2, 1);
                 
                 [~,linear_index] = max(abs(normal_bg),[],'all');
                 [center_pos_1,center_pos_2]=ind2sub(size(normal_bg),linear_index);

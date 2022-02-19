@@ -30,7 +30,7 @@ params.use_GPU = use_GPU;
 %2 illumination parameters
 field_retrieval_params=params;
 field_retrieval_params.resolution_image=[1 1]*(5.5/100);
-field_retrieval_params.conjugate_field=true;
+field_retrieval_params.conjugate_field=false;
 field_retrieval_params.use_abbe_correction=true;
 
 % 1. Aberration correction

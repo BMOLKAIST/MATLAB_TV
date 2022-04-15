@@ -1,21 +1,13 @@
-﻿/**
- * @file pctdemo_life_mex_shmem.cu
- * @brief Example of implementing a stencil operation on the GPU using shared memory.
- *
- * Copyright 2013 The MathWorks, Inc.
- */
-
+﻿
 #include <algorithm>
 #include <math.h>
 #include <cuda_runtime_api.h>
 #include "helper_fista_TV_inner_mex.hpp"
 #include "mex.h"
+#include <cuComplex.h>
+#include "cuComplex_Op.h"
 #include <type_traits>
 
- /**
-  * Host function called by MEX gateway. Sets up and calls the device function
-  * for each generation.
-  */
 
 __device__
 int smaller_to_end(int value, int end) {
@@ -34,6 +26,10 @@ void complex_mult(const float & a_1, const float & a_2, const float & b_1, const
 __device__
 float norm3(const float& a, const float& b, const float& c) {
 	return sqrt((a * a + b * b + c * c));
+}
+__device__
+float norm3(const cuFloatComplex& a, const cuFloatComplex& b, const cuFloatComplex& c) {
+	return norm3(cuCabsf(a), cuCabsf(b), cuCabsf(c));
 }
 
 template<typename T>
@@ -62,13 +58,11 @@ void kernel_1(T const * const in_matt, T const * const R_matt, T * const A_matt,
 		A_val = A_val - R_matt[d1 + (d2)*dim_1 + smaller_to_end(d3 - 1, dim_3 - 1) * dim_1 * dim_2 + dim_1 * dim_2 * dim_3 * 2];
 
 		A_val = in_matt[id] - lambda * A_val;
-		if (std::is_same<T, float>::value) {
-			A_val = (A_val > min_real ) ? A_val : min_real;
-			A_val = (A_val < max_real ) ? A_val : max_real;
-		}
-		else {
-			A_val = 0;//need to be implemented
-		}
+
+		non_neg(A_val, min_real, max_real, min_imag, max_imag);
+		//A_val = (A_val > min_real ) ? A_val : min_real;
+		//A_val = (A_val < max_real ) ? A_val : max_real;
+		
 
 		A_val = (dirichlet_boundary && (d1==0 || d2 == 0 || d3 == 0 || d1 == dim_1-1 || d2 == dim_2-1 || d3 == dim_3-1)) ? dirichlet_val : A_val ;
 
@@ -76,6 +70,33 @@ void kernel_1(T const * const in_matt, T const * const R_matt, T * const A_matt,
 	}
 	
 }
+template<typename T>
+__device__
+void non_neg(T& A_val, float const min_real, float const max_real, float const min_imag, float const max_imag) {
+	A_val = (A_val > min_real) ? A_val : min_real;
+	A_val = (A_val < max_real) ? A_val : max_real;
+}
+template<>
+__device__
+void non_neg<cuFloatComplex>(cuFloatComplex& A_val, float const min_real, float const max_real, float const min_imag, float const max_imag) {
+	A_val = (cuCrealf(A_val) > min_real) ? A_val : make_cuFloatComplex(min_real,cuCimagf(A_val));
+	A_val = (cuCrealf(A_val) < max_real) ? A_val : make_cuFloatComplex(max_real,cuCimagf(A_val));
+
+	A_val = (cuCimagf(A_val) > min_real) ? A_val : make_cuFloatComplex(cuCrealf(A_val), min_imag);
+	A_val = (cuCimagf(A_val) < max_real) ? A_val : make_cuFloatComplex(cuCrealf(A_val), max_imag);
+}
+
+template<typename T>
+__device__
+void set_zero(T& val) {
+	val = 0;
+}
+template<>
+__device__
+void set_zero<cuFloatComplex>(cuFloatComplex& val) {
+	val = make_cuFloatComplex(0,0);
+}
+
 
 template<typename T>
 __global__
@@ -99,9 +120,9 @@ void kernel_2(T const* const in_matt, T * const R_matt, T* const Pold_matt, T * 
 
 		dividend = 1 / (dividend * lambda);
 
-		T R1 = 0;
-		T R2 = 0;
-		T R3 = 0;
+		T R1; set_zero(R1);
+		T R2; set_zero(R2);
+		T R3; set_zero(R3);
 
 
 		//TV_L_trans
@@ -233,3 +254,5 @@ template<typename T> int MAIN_KERNEL(T const * const pmatt, T * const pOutArray,
 
 template int MAIN_KERNEL<float>(float const* const pmatt, float* const pOutArray, float const lambda, bool const dirichlet_boundary, int const inner_itt, int const* const dims,
 	bool const is_real, float const min_real, float const max_real, float const min_imag, float const max_imag, float const dirichlet_val);
+template int MAIN_KERNEL<cuFloatComplex>(cuFloatComplex const* const pmatt, cuFloatComplex* const pOutArray, float const lambda, bool const dirichlet_boundary, int const inner_itt, int const* const dims,
+	bool const is_real, float const min_real, float const max_real, float const min_imag, float const max_imag, cuFloatComplex const dirichlet_val);

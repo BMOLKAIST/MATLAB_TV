@@ -1,44 +1,31 @@
 classdef BACKWARD_SOLVER_SINGLE < BACKWARD_SOLVER
-    properties (SetAccess = protected, Hidden = true)
-%         utility;
-        forward_solver;
-    end
-    methods(Static)
-        function params=get_default_parameters(init_params)
-            params=get_default_parameters@BACKWARD_SOLVER();
-            %specific parameters
-%             params.forward_solver= @(x) FORWARD_SOLVER(x);
-%             params.forward_solver_parameters= FORWARD_SOLVER.get_default_parameters();
-            params.init_solver=BACKWARD_SOLVER(BACKWARD_SOLVER.get_default_parameters());
-            params.step=0.01;%0.01;0.01;%0.01;
-            params.tv_param=0.001;%0.1;
-            params.use_non_negativity=false;
-            params.nmin = 1.336;
-            params.nmax = 1.6;
-            params.kappamax = 0; % imaginary RI
-            params.inner_itt = 100; % imaginary RI
-            params.itter_max = 100; % imaginary RI
-            params.num_scan_per_iteration = 0; % 0 -> every scan is used
-            params.verbose = true;
-            if nargin==1
-                params=update_struct(params,init_params);
-            end
-        end
-    end
     methods
         function h=BACKWARD_SOLVER_SINGLE(params)
-            %do not set the init solver it is for porent class compatibility
-            h@BACKWARD_SOLVER(params);
-            if ~exist('init_solver','var')
-                init_solver=true;
+            init_params=struct( ...
+                'init_solver',BACKWARD_SOLVER(),...
+                'step',0.01,...%0.01;0.01;%0.01;
+                'tv_param',0.001,...%0.1;
+                'use_non_negativity',false,...
+                'nmin',1.336,...
+                'nmax',1.6,...
+                'kappamax',0,... % imaginary RI
+                'inner_itt',100,... % imaginary RI
+                'itter_max',100,... % imaginary RI
+                'num_scan_per_iteration',0,... % 0 -> every scan is used
+                'verbose',true ...
+            );
+            if nargin==1
+                warning('off','all');
+                init_params=update_struct(init_params, params);
+                warning('on','all');
             end
+            %do not set the init solver it is for parent class compatibility
+            h@BACKWARD_SOLVER(init_params);
         end
         
         function [RI]=solve(h,input_field,output_field, RI, mask)
             if nargin == 3
                 [RI, mask]=(h.parameters.init_solver.solve(input_field,output_field));
-            else
-%                 h.parameters.init_solver.utility=DERIVE_OPTICAL_TOOL(h.parameters);
             end
             RI = single(RI);
             mask = ifftshift(ifftshift(ifftshift(mask~=0)));

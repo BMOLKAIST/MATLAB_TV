@@ -27,12 +27,17 @@ classdef FIELD_EXPERIMENTAL_RETRIEVAL < handle
             end
         end
 
-        function [input_field,output_field,updated_optical_parameters, k0s]=get_fields(h,input_field,output_field)
+        function [input_field,output_field,updated_optical_parameters, k0s]=get_fields(h,input_field,output_field,DEBUG)
+            if nargin==3
+                DEBUG = false;
+            end
+            % Image state checker (error)
             assert(isequal(size(input_field),size(output_field)), 'Background and sample field must be of same size')
             assert(size(input_field,1) == size(input_field,2), 'The image must be a square')
+            assert(strcmp(class(input_field), class(output_field)), 'The element types of the arrays should be the same')
             assert(h.parameters.resolution_image(1) == h.parameters.resolution_image(2), 'Please enter an isotropic resolution for the image')
             assert(h.parameters.resolution(1) == h.parameters.resolution(2), 'Please enter an isotropic resolution for the output image')
-
+            
             switch ndims(input_field) 
                 case 2
                     input_field = reshape(input_field, size(input_field,1), size(input_field,2), 1);
@@ -41,31 +46,33 @@ classdef FIELD_EXPERIMENTAL_RETRIEVAL < handle
                 otherwise
                     error('image must be an single image or stack of images'); 
             end
-
-            is_overexposed=(max(max(input_field,output_field),[],[1,2])>254);
-            if is_overexposed
-                warning('The images is overexposed')
+            
+            % Image state checker (warning)
+            if isinteger(input_field)
+                % pass if element type is float
+                maximum_value = intmax(class(input_field));
+                is_overexposed = max(max(input_field,[],'all'),max(output_field,[],'all')) > maximum_value;
+                if is_overexposed
+                    warning('The images are overexposed')
+                end
             end
-            % Normal illumination: always first idx
-            if h.parameters.normalidx ~=1
-                input_field = circshift(input_field, [0 0 -h.parameters.normalidx+1]);
-                output_field = circshift(output_field, [0 0 -h.parameters.normalidx+1]);
-            end
-                
+            
+            % step 1: Convert image into Fourier space
             input_field=fft2(input_field);
             output_field=fft2(output_field);
-
             [xsize, ysize, zsize]=size(input_field);
     
-            %1 center the field in the fourier space
+            % step 2: Center the field in the Fourier space
             assert(0 < h.parameters.cutout_portion && h.parameters.cutout_portion < 1/2, "cutout portion should be the in (0,1/2)")
+            assert(1 <= h.parameters.normalidx && h.parameters.normalidx <= zsize, "Normal index should be the z index of the normal image")
+            
             search_band_1=round(xsize*(1/2-h.parameters.cutout_portion)):round(xsize/2);
             if h.parameters.other_corner
                 search_band_1=round(xsize/2):round(xsize*(1/2+h.parameters.cutout_portion));
             end
             search_band_2=round(ysize*(1/2-h.parameters.cutout_portion)):round(ysize/2);
             normal_bg=zeros(xsize, round(ysize/2));
-            normal_bg(search_band_1, search_band_2)=input_field(search_band_1, search_band_2, 1);
+            normal_bg(search_band_1, search_band_2)=input_field(search_band_1, search_band_2, h.parameters.normalidx);
                 
             [~,linear_index] = max(abs(normal_bg),[],'all');
             [center_pos_1,center_pos_2]=ind2sub(size(normal_bg),linear_index);
@@ -74,7 +81,7 @@ classdef FIELD_EXPERIMENTAL_RETRIEVAL < handle
             output_field=circshift(output_field,peak2origin);
                 
                 
-            %2 match to the resolution
+            % setp 3: Resize the fourier images to match to the desired resolution
             old_xsize = xsize;
             old_ysize = ysize;
             resolution_ratio=h.parameters.resolution(1:2)./h.parameters.resolution_image(1:2);
@@ -82,32 +89,29 @@ classdef FIELD_EXPERIMENTAL_RETRIEVAL < handle
             ysize = 2*round(old_ysize/resolution_ratio(2)/2);
                 
             if xsize ~= old_xsize || ysize ~= old_ysize
-                old_input_field = input_field;
-                old_output_field = output_field;
-                input_field = zeros(xsize,ysize,zsize);
-                output_field = zeros(xsize,ysize,zsize);
+                old_field = {input_field, output_field};
+                new_field = {zeros(xsize,ysize,zsize), zeros(xsize,ysize,zsize)};
                 half_xsize = floor(min([old_xsize xsize])/2);
                 half_ysize = floor(min([old_ysize ysize])/2);
-                    
-                input_field(1:half_xsize,1:half_ysize,:)=old_input_field(1:half_xsize,1:half_ysize,:);
-                input_field(1:half_xsize,end-half_ysize+1:end,:)=old_input_field(1:half_xsize,end-half_ysize+1:end,:);
-                input_field(end-half_xsize+1:end,1:half_ysize,:)=old_input_field(end-half_xsize+1:end,1:half_ysize,:);
-                input_field(end-half_xsize+1:end,end-half_ysize+1:end,:)=old_input_field(end-half_xsize+1:end,end-half_ysize+1:end,:);
+                
+                for i = 1:2
+                    new_field{i}(1:half_xsize,1:half_ysize,:) = old_field{i}(1:half_xsize,1:half_ysize,:);
+                    new_field{i}(1:half_xsize,end-half_ysize+1:end,:) = old_field{i}(1:half_xsize,end-half_ysize+1:end,:);
+                    new_field{i}(end-half_xsize+1:end,1:half_ysize,:) = old_field{i}(end-half_xsize+1:end,1:half_ysize,:);
+                    new_field{i}(end-half_xsize+1:end,end-half_ysize+1:end,:) = old_field{i}(end-half_xsize+1:end,end-half_ysize+1:end,:);
+                end
 
-                output_field(1:half_xsize,1:half_ysize,:)=old_output_field(1:half_xsize,1:half_ysize,:);
-                output_field(1:half_xsize,end-half_ysize+1:end,:)=old_output_field(1:half_xsize,end-half_ysize+1:end,:);
-                output_field(end-half_xsize+1:end,1:half_ysize,:)=old_output_field(end-half_xsize+1:end,1:half_ysize,:);
-                output_field(end-half_xsize+1:end,end-half_ysize+1:end,:)=old_output_field(end-half_xsize+1:end,end-half_ysize+1:end,:);
-                    
+                input_field = new_field{1};
+                output_field = new_field{2};
                 h.parameters.resolution(1)=h.parameters.resolution_image(1).*old_xsize/xsize;
                 h.parameters.resolution(2)=h.parameters.resolution_image(2).*old_ysize/ysize;
             end
 
-            %crop the NA
-            warning('off','all');
+            % step 4: crop image in accordance with the NA
             h.parameters.size(1)=xsize;
             h.parameters.size(2)=ysize;
             
+            warning('off','all');
             h.utility=DERIVE_OPTICAL_TOOL(h.parameters);
             warning('on','all');
                 
@@ -115,7 +119,8 @@ classdef FIELD_EXPERIMENTAL_RETRIEVAL < handle
             input_field=input_field.*shifted_NA_circle;
             output_field=output_field.*shifted_NA_circle;
                 
-            % Find peaks
+            % Optional step: Find peaks
+            % The data will be utilized in next processing
             if nargout>=4
                 k0s = zeros(2,size(input_field,3));
                 % Subpixel k0s correction
@@ -131,20 +136,22 @@ classdef FIELD_EXPERIMENTAL_RETRIEVAL < handle
                     [k0s(1,jj), k0s(2,jj),~] = peak_subpixel_positioner(abs(shifted_input_field),param1,param2,param3);
                 end
             end
-
+            
+            % step 5: Convert processed data into real space
             input_field=ifft2(input_field);
             output_field=ifft2(output_field);
     
             input_field = input_field(3:(end-2),3:(end-2),:);
             output_field = output_field(3:(end-2),3:(end-2),:);
-                
             h.parameters.size(1)=size(input_field,1);
             h.parameters.size(2)=size(input_field,2);
+
             if h.parameters.conjugate_field
                 input_field=conj(input_field);
                 output_field=conj(output_field);
             end
-    
+            
+            % step 6: Subpixel phase correction
             retPhase=angle(output_field./input_field);
             if h.parameters.use_GPU
                 retPhase=gather(unwrapp2_gpu(gpuArray(single(retPhase))));
@@ -157,8 +164,10 @@ classdef FIELD_EXPERIMENTAL_RETRIEVAL < handle
                 
             for jj = 1:size(retPhase,3)
                 retPhase(:,:,jj)=PhiShiftMS(retPhase(:,:,jj),1,1);
-    %                 subplot(121),imagesc(retAmplitude(:,:,jj)),axis image, axis off, colorbar
-    %                 subplot(122),imagesc(retPhase(:,:,jj)),axis image, axis off, colorbar, drawnow
+                if DEBUG
+                    subplot(121);imagesc(retAmplitude(:,:,jj));axis image; axis off; colorbar
+                    subplot(122);imagesc(retPhase(:,:,jj));axis image; axis off; colorbar; drawnow
+                end
             end
             output_field = retAmplitude .* input_field .* exp(1i.* retPhase);
                 
@@ -166,9 +175,9 @@ classdef FIELD_EXPERIMENTAL_RETRIEVAL < handle
             input_field=reshape(input_field,size(input_field,1),size(input_field,2),1,[]);
             output_field=reshape(output_field,size(output_field,1),size(output_field,2),1,[]);
                 
-    
+            % Ending: Update paramters for next processing
             h.utility=DERIVE_OPTICAL_TOOL(h.parameters);
-                
+             
             warning('abbe cos coefficient');
             updated_optical_parameters=struct( ...
                 'size',h.parameters.size, ...
@@ -198,7 +207,7 @@ classdef FIELD_EXPERIMENTAL_RETRIEVAL < handle
             end
             while true
                 close all
-                figure, imagesc(retPhase, [0 max(retPhase(:))]), axis image, colormap gray, colorbar
+                figure; imagesc(retPhase, [0 max(retPhase(:))]); axis image; colormap gray; colorbar
                 title('Choose square ROI')
                 r = drawrectangle;
                 ROI = r.Position;

@@ -19,7 +19,7 @@ classdef BACKWARD_SOLVER_SINGLE < BACKWARD_SOLVER
                 init_params=update_struct(init_params, params);
                 warning('on','all');
             end
-            %do not set the init solver it is for porent class compatibility
+            %do not set the init solver it is for parent class compatibility
             h@BACKWARD_SOLVER(init_params);
         end
         

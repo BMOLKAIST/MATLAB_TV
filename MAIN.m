@@ -17,7 +17,6 @@ cds.PEPSI = fullfile(cds.data, '2. PepsiODT - processed data', 'PEPSI_data.mat')
 cds.FL = fullfile(cds.data, '3. Fluorescence', 'FL_data.mat');
 
 %% 1. TV to ODT
-MULTI_GPU=false;
 params=struct;
 params.NA=1.16;
 params.RI_bg=1.3355;

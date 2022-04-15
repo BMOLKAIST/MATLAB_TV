@@ -41,7 +41,8 @@ classdef BACKWARD_SOLVER_RYTOV < BACKWARD_SOLVER
             [mj_0,mi_0]=find(Fbg==max(Fbg(:)));
             for ii=2:size(bg,3)
                 Fbg=fftshift(fft2(bg(:,:,ii)));
-                [mj,mi]=find(Fbg==max(Fbg(:)));
+                [~,linear_index] = max(Fbg,[],'all');
+                [mj,mi]=ind2sub(size(Fbg),linear_index);
                 f_dy(ii)=mj-mj_0;
                 f_dx(ii)=mi-mi_0;
             end

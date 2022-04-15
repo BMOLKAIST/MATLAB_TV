@@ -1,10 +1,5 @@
-function utility = DERIVE_OPTICAL_TOOL(optical_parameter,use_gpu)
-
-params= BASIC_OPTICAL_PARAMETER();
-if nargin>0 && ~ isempty(optical_parameter)
-    params=update_struct(params,optical_parameter);
-end
-if nargin<2
+function utility = DERIVE_OPTICAL_TOOL(params,use_gpu)
+if nargin==1
     use_gpu=false;
 end
 utility=struct;

@@ -1,21 +1,23 @@
 classdef FL_SOLVER < handle
     properties (SetAccess = private, Hidden = true)
-        parameters;
-        utility;
-    end
-    methods(Static)
-        function params=get_default_parameters(init_params)
-            %OPTICAL PARAMETERS
-            params=BASIC_OPTICAL_PARAMETER();
-            params.use_GPU = true;
-            if nargin==1
-                params=update_struct(params,init_params);
-            end
-        end
+        parameters=struct(...
+            'size',[100 100 100], ...
+            'wavelength', 0.532, ...
+            'NA',1.2, ...
+            'RI_bg',1.336, ...
+            'resolution',[0.1 0.1 0.1], ...
+            'vector_simulation', true, ...
+            'use_abbe_sine', true, ...
+            'use_GPU', true ...
+        );
     end
     methods
-        function h=FL_SOLVER(params)
-            h.parameters=params;
+        function h=FL_SOLVER(init_params)
+            if nargin==1
+                warning('off','all');
+                h.parameters=update_struct(h.parameters,init_params);
+                warning('on','all');
+            end
         end
         function [databg,datasp,ROI]=get_fields(h,bg_file,sp_file, typestring, ROI)
             databg = load_tiff_MS_setup(bg_file, typestring,h.parameters.RGB_on);

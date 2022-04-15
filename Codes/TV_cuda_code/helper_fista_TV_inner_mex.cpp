@@ -11,6 +11,8 @@
 #include "helper_fista_TV_inner_mex.hpp"
 #include<stdint.h>
 
+#include <cuComplex.h>
+
  /**
   * MEX gateway
   */
@@ -59,7 +61,16 @@ void mexFunction(int /* nlhs */, mxArray *plhs[],
 	mxClassID const tmatt = mxGPUGetClassID(matt);
 	mwSize const dmatt = mxGPUGetNumberOfDimensions(matt);
 	mwSize const * const smatt = mxGPUGetDimensions(matt);
-	float const * const pmatt = static_cast<float const *>(mxGPUGetDataReadOnly(matt));
+	float const *  pmatt = nullptr;
+	cuFloatComplex const*  pmatt_complex = nullptr;
+	if (cmatt == mxCOMPLEX) {
+		mexPrintf("TV for complex value --> SLOW");
+		pmatt_complex = static_cast<cuFloatComplex const*>(mxGPUGetDataReadOnly(matt));
+	}
+	else {
+		
+		pmatt = static_cast<float const*>(mxGPUGetDataReadOnly(matt));
+	}
 	//lambda
 	mxArray const* const param1 = (prhs[1]);
 	if (!mxIsSingle(param1)) {
@@ -150,16 +161,28 @@ void mexFunction(int /* nlhs */, mxArray *plhs[],
 	if (size_dirichlet_val != 1) {
 		mexErrMsgIdAndTxt(errId, errMsg3);
 	}
-	float const* const pparam8 = static_cast<float const*>(mxGetData(param8));
-	float dirichlet_val = pparam8[0];
+	float const*  pparam8 = nullptr ;
+	float dirichlet_val;
+	cuFloatComplex const* pparam8_complex=nullptr;
+	cuFloatComplex dirichlet_val_complex;
+	pparam8 = static_cast<float const*>(mxGetData(param8));
+	dirichlet_val = pparam8[0];
+	if (mxIsComplex(param8)) {
+		pparam8_complex = static_cast<cuFloatComplex const*>(mxGetData(param8));
+		dirichlet_val_complex = pparam8_complex[0];
+	}
+	else {
+		dirichlet_val_complex = make_cuFloatComplex(dirichlet_val, 0);
+	}
+	
 	//check for the types
 	if (tmatt != mxSINGLE_CLASS) {
 		mexErrMsgIdAndTxt(errId, errMsg);
 	}
 
 	//check for complexity
-	if (cmatt) {
-		mexErrMsgIdAndTxt(errId, errMsg5);
+	if (cmatt == mxCOMPLEX) {
+		//mexErrMsgIdAndTxt(errId, errMsg5);
 	}
 	//check for dimentions
 	if (dmatt != 3 && dmatt != 2 ) {
@@ -175,6 +198,10 @@ void mexFunction(int /* nlhs */, mxArray *plhs[],
 		MX_GPU_INITIALIZE_VALUES);
 
 	float * const pOutArray = static_cast<float *>(mxGPUGetData(outArray));
+	cuFloatComplex * pOutArray_complex = nullptr;
+	if (cmatt == mxCOMPLEX) {
+		pOutArray_complex = static_cast<cuFloatComplex*>(mxGPUGetData(outArray));
+	}
 
 	int dims[3] = { (size_t)(smatt[0]) ,(size_t)(smatt[1]),1 };
 	if (dmatt == 3) {
@@ -188,7 +215,7 @@ void mexFunction(int /* nlhs */, mxArray *plhs[],
 		int res = MAIN_KERNEL<float>(pmatt, pOutArray, lambda,  dirichlet_boundary, inner_itt, dims, is_real, min_real, max_real, min_imag, max_imag, dirichlet_val);
 	}
 	else {
-
+		int res = MAIN_KERNEL<cuFloatComplex>(pmatt_complex, pOutArray_complex, lambda, dirichlet_boundary, inner_itt, dims, is_real, min_real, max_real, min_imag, max_imag, dirichlet_val_complex);
 	}
 
 
